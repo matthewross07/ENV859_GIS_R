@@ -199,55 +199,55 @@ By saying "eval=false" in the code chunk naming, this code will not run when you
 
 ##Data Trim 
 ```{r dattrim,eval=F,echo=F,include=F}
-#Read in our study watershed outline. 
-setwd("~/Dropbox/Shared Science/NSF_MTM_All/MTM_GIS")
-#readOGR(folder,shapefilename)
-mud.river <- readOGR('Shapefiles/watershedoutlines','MR14_ned')
-stanley <- readOGR('Shapefiles/watershedoutlines/StanleyFork','stanleyfork_lidar')
-
-#Get raster directory
-rast.dir <- "~/Dropbox/Shared Science/NSF_MTM_All/MTM_GIS/Pericak_Summer16/Data/outputProducts/yearlyMiningTIFs"
-#Get mining extent by year
-rast.years <- list.files(rast.dir)
-#get full directories
-rast.files <- paste(rast.dir,rast.years,sep='/')
-
-
-#Read in first raster in list
-r <- raster(rast.files[1])
-#Transform shapefile to same projection as raster
-mud.match <- spTransform(mud.river,projection(r))
-#crop raster to match only study extent.
-mud.r <- crop(r,mud.match)
-#Mask out values outside of the watershed. 
-mud.r <- mask(mud.r,mud.match)
-
-
-#Store data in local directory. 
-stor.dir <- "~/Dropbox/Teaching/ENV859_GIS_R/data/rasters"
-
-#Setup a loop to do this for every file in the folder
-for(i in 1:length(rast.files)){
-  #Read in first raster
-  r <- raster(rast.files[i])
-  #crop raster to match only study extent.
-  mud.r <- crop(r,mud.match)
-  #Mask out values outside of the watershed. 
-  mud.r.mask <- mask(mud.r,mud.match)
-  #Setup a storage file place and name. 
-  stor.file <- paste(stor.dir,rast.years[i],sep='/')
-  #Write out clipped raster. 
-  writeRaster(mud.r.mask,filename=stor.file,overwrite=T)
-}
-
-#Also need to save the full shapefiles. 
-setwd("~/Dropbox/Teaching/ENV859_GIS_R/data/shapefiles")
-
-
-writeOGR(mud.match,'Watersheds',layer='mud',driver='ESRI Shapefile')
-
-
-writeOGR(stanley,'Watersheds',layer='stanley',driver='ESRI Shapefile',overwrite_layer=T)
+# #Read in our study watershed outline. 
+# setwd("~/Dropbox/Shared Science/NSF_MTM_All/MTM_GIS")
+# #readOGR(folder,shapefilename)
+# mud.river <- readOGR('Shapefiles/watershedoutlines','MR14_ned')
+# stanley <- readOGR('Shapefiles/watershedoutlines/StanleyFork','stanleyfork_lidar')
+# 
+# #Get raster directory
+# rast.dir <- "~/Dropbox/Shared Science/NSF_MTM_All/MTM_GIS/Pericak_Summer16/Data/outputProducts/yearlyMiningTIFs"
+# #Get mining extent by year
+# rast.years <- list.files(rast.dir)
+# #get full directories
+# rast.files <- paste(rast.dir,rast.years,sep='/')
+# 
+# 
+# #Read in first raster in list
+# r <- raster(rast.files[1])
+# #Transform shapefile to same projection as raster
+# mud.match <- spTransform(mud.river,projection(r))
+# #crop raster to match only study extent.
+# mud.r <- crop(r,mud.match)
+# #Mask out values outside of the watershed. 
+# mud.r <- mask(mud.r,mud.match)
+# 
+# 
+# #Store data in local directory. 
+# stor.dir <- "~/Dropbox/Teaching/ENV859_GIS_R/data/rasters"
+# 
+# #Setup a loop to do this for every file in the folder
+# for(i in 1:length(rast.files)){
+#   #Read in first raster
+#   r <- raster(rast.files[i])
+#   #crop raster to match only study extent.
+#   mud.r <- crop(r,mud.match)
+#   #Mask out values outside of the watershed. 
+#   mud.r.mask <- mask(mud.r,mud.match)
+#   #Setup a storage file place and name. 
+#   stor.file <- paste(stor.dir,rast.years[i],sep='/')
+#   #Write out clipped raster. 
+#   writeRaster(mud.r.mask,filename=stor.file,overwrite=T)
+# }
+# 
+# #Also need to save the full shapefiles. 
+# setwd("~/Dropbox/Teaching/ENV859_GIS_R/data/shapefiles")
+# 
+# 
+# writeOGR(mud.match,'Watersheds',layer='mud',driver='ESRI Shapefile')
+# 
+# 
+# writeOGR(stanley,'Watersheds',layer='stanley',driver='ESRI Shapefile',overwrite_layer=T)
 
 ```
 
