@@ -194,7 +194,7 @@ So now we have our libraries to trim by 2GB dataset into something smaller. This
 By saying "eval=false" in the code chunk naming, this code will not run when you stitch this html. 
 
 ##Data Trim 
-```{r dattrim,eval=F}
+```{r dattrim,eval=F,echo=F,include=F}
 #Read in our study watershed outline. 
 setwd("~/Dropbox/Shared Science/NSF_MTM_All/MTM_GIS")
 #readOGR(folder,shapefilename)
@@ -304,7 +304,9 @@ plot(mud.river,add=T)
 
 ```
 
+### Crop, masking, and trimming
 Let's look just at stanley fork. 
+
 ```{r stancrop}
 stan.mine <- crop(mine.99,stanley.match)
 plot(stan.mine, main='Cropped to extent only')
@@ -324,8 +326,9 @@ plot(stanley.match,add=T)
 
 ```
 
+###Summarising raster data
 What information can we extract from our raster data? 
-```{r}
+```{r summarydata}
 #What is the area of this watershed?
 stan.area <- area(stanley.match) # this is in m2, km2 makes more sense
 stan.area <- area(stanley.match)/(1000*1000)
@@ -338,11 +341,137 @@ ncell(stan.shed)
 
 #Let's set NAs to 0
 stan.shed[is.na(stan.shed)] <- 0
+#This works because each cell is actually the area. 900m2 so we can just sum up
+#The non-zero cells. 
 tote99 <- sum(as.matrix(stan.shed))/(1000*1000)
 
 tote99/stan.area
 
-#Wow 83% of the watershed was undergoing mining in 1999. 
 ```
+
+###Extracting data from rasters 
+Wow 83% of the watershed was undergoing mining in 1999. What about % active mining for every year of the watershed? Here we can use a loop to answer this question. 
+
+```{r activeMining}
+library(stringr)
+
+#I want to make sure I get the years right, so I will use stringr to make a vector that
+# lists the year from the .tif raster name. 
+rast.name <- list.files('data/rasters')
+years <- str_split_fixed(rast.name,'_',3) #Splits string into 3 column data frame
+head(years)
+#All we want is the second column
+years <- as.numeric(years[,2])
+#Now let's setup a director to grab all rasters
+rast.files <- paste('data/rasters',rast.name,sep='/')
+
+#Now we need to setup an empty data frame to hold the results of our loop
+stan.ann.mine <- data.frame(year=numeric(),mining=numeric(),pmining=numeric())
+
+#Practice loop, good idea when building a loop that may take some time to run
+i <- 1
+
+#Read in our raster data 
+mining.yr <- raster(rast.files[i])
+#Trim it to stanely fork by first cropping it and then masking it
+stan.mining.yr <- crop(mining.yr, stanley.match) %>% mask(.,stanley.match)
+#Let's set NAs to 0
+stan.mining.yr[is.na(stan.mining.yr)] <- 0
+#Sum cells
+tote.yr <- sum(as.matrix(stan.mining.yr))/(1000*1000) #km2
+#Get percent.
+tote.p <- tote.yr/stan.area
+#Put data into data frame (i = the row where data will go)
+#c concatenates data together
+stan.ann.mine[i,] <- c(years[i],tote.yr,tote.p)
+
+#looks good.
+stan.ann.mine
+
+#Now all we have to do is put this into a loop (normally I would delete the practice part, but leaving it here to show how I construct loops)
+for(i in 1:length(rast.files)){
+  #Read in our raster data 
+  mining.yr <- raster(rast.files[i])
+  #Trim it to stanely fork by first cropping it and then masking it
+  stan.mining.yr <- crop(mining.yr, stanley.match) %>% mask(.,stanley.match)
+  #Let's set NAs to 0
+  stan.mining.yr[is.na(stan.mining.yr)] <- 0
+  #Sum cells
+  tote.yr <- sum(as.matrix(stan.mining.yr))/(1000*1000) #km2
+  #Get percent.
+  tote.p <- tote.yr/stan.area
+  #Put data into data frame (i = the row where data will go)
+  #c concatenates data together
+  stan.ann.mine[i,] <- as.numeric(c(years[i],tote.yr,tote.p))
+}
+
+#Same thing but in the apply, function format that is almost always 
+# Faster, but less intuitive to code (at least initially. )
+# mine.annualizer <- function(x){
+#   mining.yr <- raster(x)
+#   #Trim it to stanely fork by first cropping it and then masking it
+#   stan.mining.yr <- crop(mining.yr, stanley.match) %>% mask(.,stanley.match)
+#   #Let's set NAs to 0
+#   stan.mining.yr[is.na(stan.mining.yr)] <- 0
+#   #Sum cells
+#   tote.yr <- sum(as.matrix(stan.mining.yr))/(1000*1000) #km2
+#   #Get percent.
+#   tote.p <- tote.yr/stan.area
+#   #Put data into data frame (i = the row where data will go)
+#   #c concatenates data together
+#   dat <- cbind(tote.yr,tote.p)
+#   return(dat)
+# }
+# mines <- sapply(rast.files,mine.annualizer)
+# 
+
+```
+
+
+Now let's plot our data.
+```{r}
+
+ggplot(stan.ann.mine,aes(x=year,y=mining)) + geom_point() +
+  ylab(expression(paste('Active Mining (',km^2,')',sep='')))
+
+
+```
+
+
+###Assignment 2
+
+Make the same plot with mining as percent mining. Then make it interactive!
+```{r assignment2}
+
+```
+
+###RasterStacks
+This data doesn't really show us cumulative mining, just active mining extent for any given year, but getting cumulative mining extent is easy with rasterStacks!
+
+```{r RasterStacks}
+
+#Read in all of the annual mining extent years into a raster stack trim to stanley
+stan.stack <- stack(rast.files) %>% 
+  crop(.,stanley.match) %>%
+  mask(.,stanley.match)
+  
+# Turn NAs into 0s
+stan.stack[is.na(stan.stack)] <- 0
+
+#sum every cell in the raster stack
+cume.mine <- sum(stan.stack)
+#Set non-0 values to 900 (area)
+cume.mine[cume.mine != 0] <- 900
+tote.mine.all <- sum(as.matrix(cume.mine))/(1000*1000)
+tote.mine.all/stan.area
+#animate(stan.stack, n=2)
+
+
+```
+
+Total cumulative mining is only 2% more than the miing in 1999. 
+
+#Fin
+
 
 
