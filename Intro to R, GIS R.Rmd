@@ -1,0 +1,250 @@
+---
+title: "Intro to R, GIS R"
+author: "Matthew Ross"
+date: "November 6, 2016"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+---
+#Intro to R
+
+Before we jump into geospatial analysis in R, let's review general properties of R itself. 
+
+
+##What is R? 
+
+R is a versatile statistical programming language, but it can also be used for geospatial analysis, making interactive data visualizations, and, with the help of RStudio, it can even be used to write papers. 
+
+##Why use R for geospatial analysis?
+
+- Free, and open source
+- Packages make it easy to do a broad array of analyses from genomics to geodesy
+- Scripting makes work inherently reproducible
+- RMarkdown is a wonderful way to share and comment code
+- Github integration makes it easy to collaborate on projects
+- Large and intuitive plotting library 
+- I learned it before I learned python
+
+##How do I use R?
+
+R takes hours to learnthe basics and a lifetime to master, like any language. But let's get started. 
+
+Like Python R is a object-oriented language, which basically means that you can assign objects to have specific features. For example, R can think of the string: "10/31/1987" as simply a string of characters or as a factor or most usefully has a Date object. For example: If R thinks of "10/31/1987" it will have specific attributes associated with that object, meaning you can subtract date objects or add them together. To work with date objects I like to use a package called lubridate. Like here:
+
+###Object example
+
+```{r objects}
+# R sees the following as a vector (sequence) of separate character objects.
+dates <- c('10/31/1987','10/31/1988')
+#Str tells us the structure of the object
+str(dates)
+# chr means character or string in python terms
+#Let's turn this into a Date object 
+#First we need to load a library
+library('lubridate')
+dts <- mdy(dates)
+#Now let's check the structure of this new object:
+str(dts)
+#It is now a date object and we can do interesting stuff with it. 
+#Like add a day
+dts + 1
+#Or expand the date to fill out the year
+dts.yr <- seq(dts[1],dts[2],length=365)
+head(dts.yr)
+```
+
+
+###Data Frames
+
+So that is a simple example of how R works. A lot of the time when working in R you will use a object called a data frame, which is essentially like a sheet in excel. For example, here is a data sheet of total surface mining extent across a few Appalachian states. 
+
+
+```{r dataframes}
+#read in my data in the data folder, I don't want R to call strings factors, hence the second command
+mining <- read.csv('data/CumeMine.csv',stringsAsFactors=F)
+#What does this data look like?
+head(mining)
+#Headers look like state names with some empty columns that have notes in them.
+names(mining)
+#Second column looks like total areas by state. #Let's extract that column and put it in a different dataset
+# I can pull this out by grabbing the first row and columns 2-5
+tote.areas<- mining[1,2:5]
+#check
+str(tote.areas)
+#oops those are characters not numbers.
+as.numeric(tote.areas)
+#Oops that doesn't work? I'm going to have to do some tricks to remove the commas. 
+tote.area.no.comma <- gsub(pattern=',',replacement='',x=tote.areas)
+#Now I can convert it to a numeric. 
+tote.area.num <- as.numeric(tote.area.no.comma)
+#But we lost the state names, let's bind it back together.
+total.areas <- data.frame(state=names(mining)[2:5],area=tote.area.num,stringsAsFactors = F)
+total.areas
+
+#Now let's fix the original data frame using sine package called tidyr dplyr and magrittr
+library(dplyr) # A great library of data fitlering tools
+library(tidyr) # Easiest way to make data tidy
+library(magrittr) # Adds pipe functionality (makes code less verbose, think arrows in model builder)
+
+#Reread in data and skip first row this time. And keep only first five columns
+mine.dat <- read.csv('data/CumeMine.csv',stringsAsFactors=F,skip=2,header=F)[1:5]
+#Rename columns
+names(mine.dat) <- c('year','kentucky','tennessee','virginia','west.virginia')
+#Convert to a tidy dataset by 'gathering' data
+annual.mining <- gather(mine.dat,key=state,value=mining,-year) %>% 
+  select(state,year,mining) %>% arrange(year) 
+#Tidy data!
+head(annual.mining)
+```
+
+###Plotting
+With our tidy dataset in hand, plotting is easy. We can look at data in so many different ways. 
+
+How do mining rates differ over time and between states? Let's use ggplot2 and find out!
+```{r glines}
+
+library(ggplot2)
+
+glines <- ggplot(annual.mining,aes(x=year,y=mining,color=state)) + geom_line()
+glines
+```
+
+What about cumulative mining extent?
+```{r gstacks}
+gstack <- ggplot(annual.mining,aes(x=year,y=mining,fill=state)) + geom_area(position='stack')
+gstack
+
+#I don't like that order, let's reorder the stacking position by using factors
+annual.mining$States <- factor(annual.mining$state,levels=c('tennessee','virginia','west.virginia','kentucky'))
+
+#Pipes too!
+gstack1 <- arrange(annual.mining,States) %>% ggplot(aes(x=year,y=mining,fill=States)) + geom_area(position='stack')
+gstack1
+```
+
+
+What about the correlation between mining in West Virginia and Kentucky?
+
+This time our data is not in the right structure to immediately look at this correlation but that is easy to fix using the command "spread" from *tidyr* package
+```{r lms}
+#First remove factor version of states
+spread.mining <- select(annual.mining,-States) %>% 
+  spread(key=state,value=mining)
+#Back to the original structure.
+head(spread.mining)
+
+ky.wv <- ggplot(spread.mining,aes(x=kentucky,y=west.virginia)) + geom_point()
+
+# We can even easily add a linear model to this data.
+ky.wv1 <- ggplot(spread.mining,aes(x=kentucky,y=west.virginia,label=year)) + 
+    geom_smooth(method='lm') +
+  geom_point() 
+
+
+# And print the model summary.
+mine.model <- lm(west.virginia~kentucky,data=spread.mining)
+summary(mine.model)
+
+#Looks like for every 1 square meter mined in KY there is 0.77 m2 mined in WV. 
+
+```
+
+We can easily add interactivity to these plots using plotly library
+```{r ggplotly}
+library(plotly)
+ggplotly(ky.wv1)
+
+```
+
+
+###  Assignment 1
+Now you have enough knowledge to create your own plots. Let's try to plot cumulative mining as a percentage of total area. 
+
+```{r assignment1}
+#First we need to join the total area data with the annual mining extent data.
+p.mining <- left_join(annual.mining,total.areas,by='state') %>% 
+  #Then add a column dividing mining extent by total area
+  mutate(percent = mining/area)
+head(p.mining)
+#Now you make a plot here!
+
+```
+
+
+#Geospatial R
+Ok, now you have a basic understanding of how to use R let's make it spatial!
+
+For this example I am going to trim some data from my research and move it into the directory for the class. But first I'm going to load in our key libraries
+
+##Key Libraries
+```{r geolibraries}
+library(rgdal) # For reprojection and raster package
+library(raster) #For playing with raster data
+library(sp) #For shapefiles
+
+```
+
+A key warning pops up here saying that "select" is masked from dplyr, meaning when we use the select command R will default to using the raster version of select, not the dplyr version. So if we want to use dplyr version we have to do a python like thing: "dplyr::select"
+
+
+So now we have our libraries to trim by 2GB dataset into something smaller. This code chunk will not work, but I'm leaving it here for posterity. And to show you some RMarkdown tricks!
+
+By saying "eval=false" in the code chunk naming, this code will not run when you stitch this html. 
+
+##Data Trim 
+```{r dattrim,eval=F}
+#Read in our study watershed outline. 
+setwd("~/Dropbox/Shared Science/NSF_MTM_All/MTM_GIS")
+#readOGR(folder,shapefilename)
+mud.river <- readOGR('Shapefiles/watershedoutlines','MR14_ned')
+stanley <- readOGR('Shapefiles/watershedoutlines/StanleyFork','stanleyfork_old')
+
+#Get raster directory
+rast.dir <- "~/Dropbox/Shared Science/NSF_MTM_All/MTM_GIS/Pericak_Summer16/Data/outputProducts/yearlyMiningTIFs"
+#Get mining extent by year
+rast.years <- list.files(rast.dir)
+#get full directories
+rast.files <- paste(rast.dir,rast.years,sep='/')
+
+
+#Read in first raster in list
+r <- raster(rast.files[1])
+#Transform shapefile to same projection as raster
+mud.match <- spTransform(mud.river,projection(r))
+#crop raster to match only study extent.
+mud.r <- crop(r,mud.match)
+#Mask out values outside of the watershed. 
+mud.r <- mask(mud.r,mud.match)
+
+
+#Store data in local directory. 
+stor.dir <- "~/Dropbox/Teaching/ENV859_GIS_R/data/rasters"
+
+#Setup a loop to do this for every file in the folder
+for(i in 1:length(rast.files)){
+  #Read in first raster
+  r <- raster(rast.files[i])
+  #crop raster to match only study extent.
+  mud.r <- crop(r,mud.match)
+  #Mask out values outside of the watershed. 
+  mud.r.mask <- mask(mud.r,mud.match)
+  #Setup a storage file place and name. 
+  stor.file <- paste(stor.dir,rast.years[i],sep='/')
+  #Write out clipped raster. 
+  writeRaster(mud.r.mask,filename=stor.file,overwrite=T)
+}
+
+#Also need to save the full shapefiles. 
+setwd("~/Dropbox/Teaching/ENV859_GIS_R/data/shapefiles")
+
+
+writeOGR(mud.match,'Watersheds',layer='mud.shp',driver='ESRI Shapefile')
+
+
+writeOGR(stanley,'Watersheds',layer='stanley.shp',driver='ESRI Shapefile')
+
+```
+
+##
+
