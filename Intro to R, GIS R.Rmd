@@ -182,6 +182,7 @@ For this example I am going to trim some data from my research and move it into 
 library(rgdal) # For reprojection and raster package
 library(raster) #For playing with raster data
 library(sp) #For shapefiles
+library(rgeos) #For area estimation. 
 
 ```
 
@@ -198,7 +199,7 @@ By saying "eval=false" in the code chunk naming, this code will not run when you
 setwd("~/Dropbox/Shared Science/NSF_MTM_All/MTM_GIS")
 #readOGR(folder,shapefilename)
 mud.river <- readOGR('Shapefiles/watershedoutlines','MR14_ned')
-stanley <- readOGR('Shapefiles/watershedoutlines/StanleyFork','stanleyfork_old')
+stanley <- readOGR('Shapefiles/watershedoutlines/StanleyFork','stanleyfork_lidar')
 
 #Get raster directory
 rast.dir <- "~/Dropbox/Shared Science/NSF_MTM_All/MTM_GIS/Pericak_Summer16/Data/outputProducts/yearlyMiningTIFs"
@@ -239,12 +240,109 @@ for(i in 1:length(rast.files)){
 setwd("~/Dropbox/Teaching/ENV859_GIS_R/data/shapefiles")
 
 
-writeOGR(mud.match,'Watersheds',layer='mud.shp',driver='ESRI Shapefile')
+writeOGR(mud.match,'Watersheds',layer='mud',driver='ESRI Shapefile')
 
 
-writeOGR(stanley,'Watersheds',layer='stanley.shp',driver='ESRI Shapefile')
+writeOGR(stanley,'Watersheds',layer='stanley',driver='ESRI Shapefile',overwrite_layer=T)
 
 ```
 
-##
+##Shapefiles
+
+For this exercise we will be using watershed outlines from two of my study watersheds. First we need to read these shapefiles in and then we can play around with them. 
+
+To read in the data we will use readOGR from the rgdal package, like this readOGR(*folder*, shapefile)
+
+```{r rgdal}
+
+mud.river <- readOGR('data/shapefiles/Watersheds','mud')
+stanley.fork <- readOGR('data/shapefiles/Watersheds','stanley')
+#Print information on the shapefile
+mud.river
+stanley.fork
+
+plot(mud.river)
+plot(stanley.fork,add=T)
+
+```
+
+Ok so now we have two shapefile and we can plot them, though the plot is pretty boring. We will fix that later, but for context here is the general area we are looking at. 
+
+(echo = false hides this code.)
+```{r leafletsample, echo=F}
+library(leaflet)
+leaflet() %>% addProviderTiles('Esri.WorldImagery') %>% 
+    setView(lng = -81.93603515625, lat = 38.1046650598288, zoom = 14)
+
+```
+
+
+
+
+
+First we need to fix the fact that stanley fork, which is a watershed inside of the mud river watershed, is not plotting. Look at the coord output to see why.
+
+```{r reproject}
+#Our shapefiles don't have matching projections, but that is easy to fix!
+stanley.match <- spTransform(stanley.fork, projection(mud.river))
+
+plot(mud.river)
+plot(stanley.match,add=T,col='blue')
+
+```
+
+##Rasters
+
+Now we have some watershed outlines and maybe we want to figure out how much mining there was each year in these watersheds. In the raster folder we have annual mining extent for the mud river as rasters (as .tifs). So let's play with the raster library and see what this data looks like. 
+
+```{r rasters}
+# Let's see what mining looks like from 1999
+mine.99 <- raster('data/rasters/mining_1999_1014.tif')
+#Plot the data. 
+plot(mine.99)
+plot(mud.river,add=T)
+
+```
+
+Let's look just at stanley fork. 
+```{r stancrop}
+stan.mine <- crop(mine.99,stanley.match)
+plot(stan.mine, main='Cropped to extent only')
+plot(stanley.match,add=T)
+
+# But that only cropped the data to the extent of stanley fork watershed. 
+mask(stan.mine,stanley.match) %>% 
+  plot(., main='Cropped to watershed outline') # The dot just retrieves the previous object fed from the pipe!
+plot(stanley.match,add=T)
+
+#We can trim this raster even more though witht the trim command
+mask(stan.mine,stanley.match) %>% 
+  trim(.) %>%
+  plot(., main='Cropped and trimmed to watershed outline')
+plot(stanley.match,add=T)
+
+
+```
+
+What information can we extract from our raster data? 
+```{r}
+#What is the area of this watershed?
+stan.area <- area(stanley.match) # this is in m2, km2 makes more sense
+stan.area <- area(stanley.match)/(1000*1000)
+
+# Mask stan.mine again.
+stan.shed <- mask(stan.mine,stanley.match)
+#How many cells are in stan.shed? 
+ncell(stan.shed)
+#But this includes a bunch of NAs so we can't use it to calculate area. 
+
+#Let's set NAs to 0
+stan.shed[is.na(stan.shed)] <- 0
+tote99 <- sum(as.matrix(stan.shed))/(1000*1000)
+
+tote99/stan.area
+
+#Wow 83% of the watershed was undergoing mining in 1999. 
+```
+
 
