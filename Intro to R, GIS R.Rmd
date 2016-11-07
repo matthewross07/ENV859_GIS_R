@@ -35,6 +35,10 @@ Like Python R is a object-oriented language, which basically means that you can 
 ###Object example
 
 ```{r objects}
+##Install key libraries
+# install.packages('rgdal','rgeos','lubridate','ggplot2','dplyr','tidyr','stringr','plotly','raster','leaflet','sp')
+
+
 # R sees the following as a vector (sequence) of separate character objects.
 dates <- c('10/31/1987','10/31/1988')
 #Str tells us the structure of the object
@@ -135,12 +139,12 @@ spread.mining <- select(annual.mining,-States) %>%
 head(spread.mining)
 
 ky.wv <- ggplot(spread.mining,aes(x=kentucky,y=west.virginia)) + geom_point()
-
+ky.wv
 # We can even easily add a linear model to this data.
 ky.wv1 <- ggplot(spread.mining,aes(x=kentucky,y=west.virginia,label=year)) + 
     geom_smooth(method='lm') +
   geom_point() 
-
+ky.wv1
 
 # And print the model summary.
 mine.model <- lm(west.virginia~kentucky,data=spread.mining)
