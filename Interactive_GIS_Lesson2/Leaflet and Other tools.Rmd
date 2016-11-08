@@ -1,0 +1,204 @@
+---
+title: "Using Leaflet and Other interactive tools"
+author: "Matthew Ross"
+date: "11/8/2016"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+---
+
+#Interactivity in R
+In the last five years, R and RStudio have dramatically increased the ability for R to use modern libraries in JavaScript and HTML to generate really nice interactive maps and figures. We'll use datasets from Durham, NC to expore these libraries and do some basic geospatial analyses. Durham actually uses leaflet, open source web based maps, for all of its data displaying. So let's use leaflet also!
+
+##Leaflet
+Leaflet is a JavaScript library and you can work directly in leaflets original library if you prefer JavaScript. But R can also be used to interface with leaflet. Let's load all our geospatial libraries to get started.
+
+###Libraries
+*Library loading code not shown*
+```{r libraries,include=F, warning='hide'}
+#List of packages you will need. Let's load them all
+# install.packages('rgdal','rgeos','lubridate','ggplot2','dplyr','tidyr','stringr','plotly','raster','leaflet','sp','RColorBrewer')
+library(rgdal)
+library(rgeos)
+library(tidyverse) #includes ggplot2, dplyr, tidyr, and a few others
+library(raster)
+library(plotly)
+library(leaflet)
+library(sp)
+library(lubridate)
+library(RColorBrewer)
+
+```
+
+### Leaflet basemaps
+Now that we have all the packages we need we can start to use leaflet to make nice interactive maps. First let's look at how we can add basemaps (imagery, contour, etc...) to a Leaflet map. All basemaps can be found [here](https://leaflet-extras.github.io/leaflet-providers/preview/). Not all of them work though. 
+
+```{r basemaps}
+#To pull up a leaflet map we just use the simple command leaflet, which brings up an empty space because we haven't given it a basemap yet. 
+leaflet() 
+
+#To add tiles we pipe our leaflet map (%>%) to the addProviderTiles command
+leaflet() %>% 
+  addProviderTiles('Esri.WorldStreetMap') 
+
+#But that is zoomed out really far. Let's set the view window by piping this map to a setview command
+leaflet() %>% 
+  addProviderTiles('Esri.WorldStreetMap') %>%
+  setView(lat=46.1275, lng= 7.5699,zoom=14)
+#Cool a lake in Switzerland! but what about aerial imagery? we can add another basetile and toggle between it and street maps
+
+leaflet() %>% 
+  addProviderTiles('Esri.WorldStreetMap', group='Streets') %>%
+  addProviderTiles('Esri.WorldImagery',group='Imagery') %>%
+  addLayersControl(baseGroups=c('Streets','Imagery'),
+                                     options = layersControlOptions(collapsed = F, autoZIndex =
+                                         T)) %>% 
+  setView(lat=46.1275, lng= 7.5699,zoom=14)
+#Now we can toggle between streets and imagery
+
+```
+
+###Reading in and subsetting a shapefile. 
+Ok now we know how to generate a simple leaflet map, but let's see if we can add some of our own data to one. 
+```{r}
+
+#First read in a csv of crime reports from October for Durham NC
+#Only October Crime Data as a shapefile 
+system.time(
+octcrime <- readOGR('data/durham-police-crime-reports','durham-police-crime-reports',stringsAsFactors=F)
+)
+?readOGR
+system.time(#Full 2016 data as a geojson file. 
+crime <- readOGR('data/durham-police-crime-reports.geojson',"OGRGeoJSON",stringsAsFactors = F)
+)
+# That takes 6 seconds to load (on my computer) is there a more efficient way to load and write geospatial data?
+#Of course there is! Saving it has an .RData 
+
+save(octcrime,crime,file='data/crimedat.RData') # Ran this to setup program.
+system.time(
+load('data/crimedat.RData')
+)
+# Whoa! That was way faster! .RData is one of the most efficient storage algorithims for any kind of data.
+
+#What kind of data is in here? 
+names(crime)
+#Maybe reportedas has some information on crime type in it let's sort it by most frequent incident
+reports <- sort(table(crime$reportedas),decreasing=T)
+#Most common polic reports of 2016
+row.names(reports[1:10])
+#Yep. Let's filter this data to focus on the top 10 most common crimes
+# We can't use dplyr with spatial data, so we will use a different approach
+crm10 <- crime[crime$reportedas %in% row.names(reports[1:10]),]
+oct10 <- octcrime[octcrime$reportedas %in% row.names(reports[1:10]),]
+#This is the "Old R" way to subset a dataset. 
+# I'm asking R to select all the records where the column 'reportedas' has a value that
+#is in or "%in%" the vector of top 10 most common reports. 
+
+#lets plot this data. 
+plot(crm10,col=factor(crm10$reportedas))
+#Well that is a mess and provides no spatial references to look at. Let's use leaflet to make it better!
+```
+
+
+### Adding shapefiles to a leaflet map
+The advantage of leaflet is that you can choose a basemap (just like in ARC) and look at how your data appears relative to roads, forests, or whatever you are interested in. Let's try that with our crime data for Durham. 
+```{r}
+#Let's pull up our baseplot of durham (same code as above but i'm changing the set view portion by googling durham lat long) and changing the basemap
+no.shapes <- leaflet() %>% 
+  addProviderTiles('CartoDB.Positron', group='Streets') %>%
+  addProviderTiles('Esri.WorldImagery',group='Imagery') %>%
+  addLayersControl(baseGroups=c('Streets','Imagery'),
+                                     options = layersControlOptions(collapsed = F, autoZIndex =
+                                         T)) %>% 
+  setView(lat=35.9940, lng= -78.8986,zoom=13)
+no.shapes
+
+# Now we can add our crime plots to this shapefile using addCricles command
+no.shapes %>% addCircleMarkers(data=crm10,popup=crm10$reportedas,radius=3) 
+#Ok that worked but it doesn't exactly have a nice look. 
+#Let's change the colors using colorFactor command and brewer.pal (from RColorBrewer)
+cols <- brewer.pal(10,name='Spectral')
+?brewer.pal
+crime.col <-colorFactor(cols,
+                  domain = crm10$reportedas)
+
+no.shapes %>% addCircleMarkers(data=crm10,
+                         popup=crm10$chrgdesc, #Crime desc. will pop up when user clicks on it
+                         color=crime.col(crm10$reportedas), #Colors crimes based on color brewer
+                         group='Crimes 2016', # Allows us to add or subtract groups later
+                         radius=2) #Shrinks display circles.
+#But that is still too much information to really look at. Can we cluster data? Yes!
+
+shapes<- no.shapes %>% addCircleMarkers(data=crm10,
+                         popup=crm10$chrgdesc, #Crime type will pop up when user clicks on it
+                         color=crime.col(crm10$reportedas), #Colors crimes based on color brewer
+                         group='Crimes 2016', # Allows us to add or subtract groups later
+                         radius=10,# Expands display circles
+                         clusterOptions=T) # Clusters crimes until we zoom into an appropriate level. 
+
+#But without a legend that is not so useful. Let's add one!
+legend <- shapes %>% addLegend(
+  position = 'topleft',
+  values=crm10$reportedas,
+  labels = crm10$reportedas,
+  pal=crime.col,
+  title='Crime Type'
+)
+
+#Maybe we just want to see crime for october? 
+legend %>% addCircleMarkers(data=oct10,
+                            popup=oct10$chrgdesc,
+                            color=crime.col(oct10$reportedas),
+                            group='Oct. 2016 Crimes',
+                            radius=5) %>%
+addLayersControl(baseGroups=c('Streets','Imagery'),
+                   overlayGroups=c('Crimes 2016','Oct. 2016 Crimes'),
+                      options = layersControlOptions(collapsed = F, autoZIndex =
+                                         T))
+
+```
+
+That map looks okay, but it is really better suited to displaying individual crime events, rather than crime trends. To display crime trends, we would need to turn it into some kind of heat map. The raster package has just the thing!
+
+##Rasterizing point data
+When you have a lot of point data but you want to express it as a spatial trend, turning it into a raster is a great option. Let's see how we can do that using the raster package
+```{r}
+#For this we will use the rasterize function from the raster package
+#First we need to build an empty raster to average our crime rates over. Let's use a 2500 block resolution
+
+
+empty <- raster(nrows=50, # Raster will have 100 rows
+                ncol=50, # With 100 colums
+                crs=projection(crime), # We will give it the same projection as our crime data
+                ext=extent(crime)) # And the same extent. 
+# Now let's fill that empty raster with total crime data
+crime.rate <- rasterize(crime, #Our point layer
+                        empty, # Our empty raster
+                        field=rep(1,nrow(crime)), # Each crime counts as 1
+                        fun = 'count')
+
+plot(crime.rate,main='Crime Rate in Durham 2016')
+#or if it's still broken
+spplot(crime.rate)
+#Cool that worked. But would be better on a leaflet map
+```
+
+###Assignment 1
+Try to rasterize a subset of the crime data. What is the crime rate for only Larceny crimes?
+```{r}
+#YOUR CODE HERE
+
+```
+
+
+
+
+
+
+###Plotting raster data in leaflet
+```{r}
+
+```
+
+
