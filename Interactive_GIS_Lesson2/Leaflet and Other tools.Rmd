@@ -68,7 +68,7 @@ Ok now we know how to generate a simple leaflet map, but let's see if we can add
 system.time(
 octcrime <- readOGR('data/durham-police-crime-reports','durham-police-crime-reports',stringsAsFactors=F)
 )
-?readOGR
+
 system.time(#Full 2016 data as a geojson file. 
 crime <- readOGR('data/durham-police-crime-reports.geojson',"OGRGeoJSON",stringsAsFactors = F)
 )
@@ -197,8 +197,25 @@ Try to rasterize a subset of the crime data. What is the crime rate for only Lar
 
 
 ###Plotting raster data in leaflet
+What if we wanted to plot that raster data in leaflet. Can we? Yes!
+
 ```{r}
 
+
+#First let's setup a color pallete.
+rast.col <- colorNumeric(rev(brewer.pal(10,'Spectral')),values(crime.rate),na.color='transparent')
+
+#Now let's plt the data!
+crime.rate.map <- leaflet() %>%
+ addProviderTiles('CartoDB.Positron') %>% #Then pipe it to the addRasterLayer command
+   addRasterImage(crime.rate,layerId='Crime Rate',group='Raster',
+                  opacity=0.5,color=rast.col)  %>%
+  addLegend(pal=rast.col,values=values(crime.rate)) %>%
+  setView(lat=35.9940, lng= -78.8986,zoom=11)
+
+crime.rate.map
 ```
 
+If we have time you can add more to this map yourself!
 
+#Fin
