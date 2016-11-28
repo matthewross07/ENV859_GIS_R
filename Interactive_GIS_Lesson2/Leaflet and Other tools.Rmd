@@ -75,7 +75,13 @@ crime <- readOGR('data/durham-police-crime-reports.geojson',"OGRGeoJSON",strings
 # That takes 6 seconds to load (on my computer) is there a more efficient way to load and write geospatial data?
 #Of course there is! Saving it has an .RData 
 
-save(octcrime,crime,file='data/crimedat.RData') # Ran this to setup program.
+neighb <- readOGR('data/gis_data_from_2005','BlkGrp05')
+neighb <- spTransform(neighb,projection(crime))
+save(octcrime,crime,neighb,file='data/crimedat.RData') # Ran this to setup program.
+
+
+
+
 system.time(
 load('data/crimedat.RData')
 )
@@ -119,7 +125,6 @@ no.shapes %>% addCircleMarkers(data=crm10,popup=crm10$reportedas,radius=3)
 #Ok that worked but it doesn't exactly have a nice look. 
 #Let's change the colors using colorFactor command and brewer.pal (from RColorBrewer)
 cols <- brewer.pal(10,name='Spectral')
-?brewer.pal
 crime.col <-colorFactor(cols,
                   domain = crm10$reportedas)
 
@@ -178,6 +183,9 @@ crime.rate <- rasterize(crime, #Our point layer
                         field=rep(1,nrow(crime)), # Each crime counts as 1
                         fun = 'count')
 
+
+
+save(octcrime,crime,neighb,crime.rate,file='data/crimedat.final.RData') # save final dataset
 plot(crime.rate,main='Crime Rate in Durham 2016')
 #or if it's still broken
 spplot(crime.rate)
